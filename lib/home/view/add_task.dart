@@ -1,34 +1,27 @@
+// views/add_task_page.dart
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
+import 'package:to_do_application_1/home/controller/add_task_provider.dart';
 
-class AddTaskPage extends StatefulWidget {
+class AddTaskPage extends StatelessWidget {
   const AddTaskPage({super.key});
 
   @override
-  State<AddTaskPage> createState() => _AddTaskPageState();
+  Widget build(BuildContext context) {
+    return ChangeNotifierProvider(
+      create: (_) => AddTaskProvider(),
+      child: const _AddTaskView(),
+    );
+  }
 }
 
-class _AddTaskPageState extends State<AddTaskPage> {
-  final _titleController = TextEditingController();
-  final _descriptionController = TextEditingController();
-  DateTime? _selectedDate;
-
-  void _submitTask() {
-    if (_titleController.text.isNotEmpty &&
-        _descriptionController.text.isNotEmpty &&
-        _selectedDate != null) {
-      final task = {
-        'title': _titleController.text,
-        'description': _descriptionController.text,
-        'dueDate': DateFormat('yyyy-MM-dd').format(_selectedDate!),
-        'isDone': false,
-      };
-      Navigator.pop(context, task);
-    }
-  }
+class _AddTaskView extends StatelessWidget {
+  const _AddTaskView();
 
   @override
   Widget build(BuildContext context) {
+    final provider = Provider.of<AddTaskProvider>(context);
+
     return Scaffold(
       backgroundColor: const Color.fromRGBO(26, 26, 26, 1),
       appBar: AppBar(
@@ -40,12 +33,12 @@ class _AddTaskPageState extends State<AddTaskPage> {
         padding: const EdgeInsets.all(16),
         child: ListView(
           children: [
-            _buildTextField('Task Title', _titleController),
+            _buildTextField('Task Title', provider.titleController),
             const SizedBox(height: 16),
-            _buildTextField('Description', _descriptionController),
+            _buildTextField('Description', provider.descriptionController),
             const SizedBox(height: 16),
             InkWell(
-              onTap: _pickDate,
+              onTap: () => _pickDate(context),
               child: Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
@@ -53,20 +46,26 @@ class _AddTaskPageState extends State<AddTaskPage> {
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
-                  _selectedDate == null
-                      ? 'Select Due Date'
-                      : 'Due: ${DateFormat('yyyy-MM-dd').format(_selectedDate!)}',
+                  provider.formattedDate ?? 'Select Due Date',
                   style: const TextStyle(color: Colors.white),
                 ),
               ),
             ),
             const SizedBox(height: 24),
             ElevatedButton(
-              onPressed: _submitTask,
+              onPressed: provider.isFormValid
+                  ? () {
+                      final task = provider.createTask();
+                      Navigator.pop(context, task.toMap());
+                      provider.clearForm();
+                    }
+                  : null,
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color.fromRGBO(30, 111, 159, 1),
+                disabledBackgroundColor: Colors.grey,
               ),
-              child: const Text('Save Task', style: TextStyle(color: Colors.white),),
+              child: const Text('Save Task',
+                  style: TextStyle(color: Colors.white)),
             ),
           ],
         ),
@@ -88,7 +87,8 @@ class _AddTaskPageState extends State<AddTaskPage> {
     );
   }
 
-  void _pickDate() async {
+  void _pickDate(BuildContext context) async {
+    final provider = Provider.of<AddTaskProvider>(context, listen: false);
     final picked = await showDatePicker(
       context: context,
       initialDate: DateTime.now(),
@@ -97,14 +97,15 @@ class _AddTaskPageState extends State<AddTaskPage> {
       builder: (context, child) {
         return Theme(
           data: ThemeData.dark().copyWith(
-            colorScheme: const ColorScheme.dark(primary: Color.fromRGBO(30, 111, 159, 1)),
+            colorScheme: const ColorScheme.dark(
+                primary: Color.fromRGBO(30, 111, 159, 1)),
           ),
           child: child!,
         );
       },
     );
     if (picked != null) {
-      setState(() => _selectedDate = picked);
+      provider.setDate(picked);
     }
   }
 }

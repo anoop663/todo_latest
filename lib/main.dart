@@ -3,9 +3,11 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:lottie/lottie.dart';
 import 'package:provider/provider.dart';
+import 'package:to_do_application_1/home/controller/home_provider.dart';
 import 'package:to_do_application_1/home/view/home.dart';
 import 'package:to_do_application_1/login/controller/login_controller.dart';
 import 'package:to_do_application_1/login/view/login_view.dart';
+import 'package:to_do_application_1/register/controller/register_provider.dart';
 import 'package:to_do_application_1/register/view/register_view.dart';
 
 void main() async {
@@ -22,6 +24,8 @@ class MainApp extends StatelessWidget {
     return MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => LoginController()),
+        ChangeNotifierProvider(create: (_) => RegisterProvider()),
+        ChangeNotifierProvider(create: (_) => TodoProvider()),
       ],
       child: MaterialApp(
         routes: {

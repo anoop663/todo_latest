@@ -27,6 +27,7 @@ flutter:
 
   assets:
     - assets/splash.json
+    - assets/icons/
 
   fonts:
     - family: Inter

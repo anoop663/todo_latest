@@ -1,7 +1,10 @@
+// views/edit_task_page.dart
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
+import 'package:to_do_application_1/home/controller/task_edit_cotroller.dart';
 
-class EditTaskPage extends StatefulWidget {
+
+class EditTaskPage extends StatelessWidget {
   final String taskId;
   final String initialTitle;
   final String initialDescription;
@@ -12,41 +15,30 @@ class EditTaskPage extends StatefulWidget {
     required this.taskId,
     required this.initialTitle,
     required this.initialDescription,
-    required this.initialDueDate, required title, required description, required dueDate,
+    required this.initialDueDate,
   });
 
   @override
-  State<EditTaskPage> createState() => _EditTaskPageState();
+  Widget build(BuildContext context) {
+    return ChangeNotifierProvider(
+      create: (_) => EditTaskProvider()
+        ..initialize(
+          title: initialTitle,
+          description: initialDescription,
+          dueDate: initialDueDate,
+        ),
+      child: const _EditTaskView(),
+    );
+  }
 }
 
-class _EditTaskPageState extends State<EditTaskPage> {
-  late TextEditingController _titleController;
-  late TextEditingController _descriptionController;
-  DateTime? _selectedDate;
-
-  @override
-  void initState() {
-    super.initState();
-    _titleController = TextEditingController(text: widget.initialTitle);
-    _descriptionController = TextEditingController(text: widget.initialDescription);
-    _selectedDate = DateFormat('yyyy-MM-dd').parse(widget.initialDueDate);
-  }
-
-  void _updateTask() {
-    if (_titleController.text.isNotEmpty &&
-        _descriptionController.text.isNotEmpty &&
-        _selectedDate != null) {
-      final updatedTask = {
-        'title': _titleController.text,
-        'description': _descriptionController.text,
-        'dueDate': DateFormat('yyyy-MM-dd').format(_selectedDate!),
-      };
-      Navigator.pop(context, updatedTask);
-    }
-  }
+class _EditTaskView extends StatelessWidget {
+  const _EditTaskView();
 
   @override
   Widget build(BuildContext context) {
+    final provider = Provider.of<EditTaskProvider>(context);
+
     return Scaffold(
       backgroundColor: const Color.fromRGBO(26, 26, 26, 1),
       appBar: AppBar(
@@ -58,12 +50,12 @@ class _EditTaskPageState extends State<EditTaskPage> {
         padding: const EdgeInsets.all(16),
         child: ListView(
           children: [
-            _buildTextField('Task Title', _titleController),
+            _buildTextField('Task Title', provider.titleController),
             const SizedBox(height: 16),
-            _buildTextField('Description', _descriptionController),
+            _buildTextField('Description', provider.descriptionController),
             const SizedBox(height: 16),
             InkWell(
-              onTap: _pickDate,
+              onTap: () => _pickDate(context),
               child: Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
@@ -71,20 +63,25 @@ class _EditTaskPageState extends State<EditTaskPage> {
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
-                  _selectedDate == null
-                      ? 'Select Due Date'
-                      : 'Due: ${DateFormat('yyyy-MM-dd').format(_selectedDate!)}',
+                  provider.formattedDate ?? 'Select Due Date',
                   style: const TextStyle(color: Colors.white),
                 ),
               ),
             ),
             const SizedBox(height: 24),
             ElevatedButton(
-              onPressed: _updateTask,
+              onPressed: provider.isFormValid
+                  ? () {
+                      final task = provider.updateTask();
+                      Navigator.pop(context, task.toMap());
+                    }
+                  : null,
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color.fromRGBO(30, 111, 159, 1),
+                disabledBackgroundColor: Colors.grey,
               ),
-              child: const Text('Update Task', style: TextStyle(color: Colors.white)),
+              child: const Text('Update Task',
+                  style: TextStyle(color: Colors.white)),
             ),
           ],
         ),
@@ -106,23 +103,26 @@ class _EditTaskPageState extends State<EditTaskPage> {
     );
   }
 
-  void _pickDate() async {
+  void _pickDate(BuildContext context) async {
+    final provider = Provider.of<EditTaskProvider>(context, listen: false);
     final picked = await showDatePicker(
       context: context,
-      initialDate: _selectedDate ?? DateTime.now(),
+      initialDate: provider.selectedDate ?? DateTime.now(),
       firstDate: DateTime(2024),
       lastDate: DateTime(2030),
       builder: (context, child) {
         return Theme(
           data: ThemeData.dark().copyWith(
-            colorScheme: const ColorScheme.dark(primary: Color.fromRGBO(30, 111, 159, 1)),
+            colorScheme: const ColorScheme.dark(
+              primary: Color.fromRGBO(30, 111, 159, 1),
+            ),
           ),
           child: child!,
         );
       },
     );
     if (picked != null) {
-      setState(() => _selectedDate = picked);
+      provider.setDate(picked);
     }
   }
 }

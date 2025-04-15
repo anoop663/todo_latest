@@ -1,8 +1,9 @@
 // ignore_for_file: use_build_context_synchronously
 
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:to_do_application_1/home/controller/home_provider.dart';
 import 'package:to_do_application_1/home/view/add_task.dart';
 import 'package:to_do_application_1/home/view/edit_task.dart';
 
@@ -14,24 +15,19 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  final user = FirebaseAuth.instance.currentUser;
+  TextEditingController _searchController = TextEditingController();
+  String _searchQuery = '';
 
-  Future<void> _navigateToAddTask() async {
-    final newTask = await Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => const AddTaskPage(),
-      ),
-    );
+  @override
+  void initState() {
+    super.initState();
+    Provider.of<TodoProvider>(context, listen: false).fetchTodos();
+  }
 
-    if (newTask != null && newTask is Map<String, dynamic>) {
-      await FirebaseFirestore.instance
-          .collection('users')
-          .doc(user!.uid)
-          .collection('todos')
-          .add(newTask);
-      setState(() {}); // Refresh UI
-    }
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
   void _logout() async {
@@ -39,220 +35,204 @@ class _HomePageState extends State<HomePage> {
     Navigator.pushReplacementNamed(context, '/login');
   }
 
+  Future<void> _navigateToAddTask() async {
+    final newTask = await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const AddTaskPage()),
+    );
+
+    if (newTask != null && newTask is Map<String, dynamic>) {
+      await Provider.of<TodoProvider>(context, listen: false).addTodo(newTask);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final screenHeight = MediaQuery.of(context).size.height;
+    final todos = Provider.of<TodoProvider>(context).todos;
+    final filteredTodos = _searchQuery.isEmpty
+        ? todos
+        : todos.where((todo) =>
+            todo.title.toLowerCase().contains(_searchQuery) ||
+            todo.description.toLowerCase().contains(_searchQuery)
+        ).toList();
+
+    final pendingCount = filteredTodos.where((t) => !t.isDone).length;
+    final completedCount = filteredTodos.where((t) => t.isDone).length;
 
     return Scaffold(
-      backgroundColor: const Color.fromRGBO(26, 26, 26, 1),
+      backgroundColor: const Color(0xFF1A1A1A),
       appBar: AppBar(
-        backgroundColor: const Color.fromRGBO(13, 13, 13, 1),
+        backgroundColor: const Color(0xFF0D0D0D),
         title: const Text('My Tasks', style: TextStyle(color: Colors.white)),
         centerTitle: true,
         actions: [
           IconButton(
             icon: const Icon(Icons.logout, color: Colors.white),
             onPressed: _logout,
+            tooltip: 'Logout',
           ),
         ],
       ),
-      body: StreamBuilder<QuerySnapshot>(
-        stream: FirebaseFirestore.instance
-            .collection('users')
-            .doc(user!.uid)
-            .collection('todos')
-            .snapshots(),
-        builder: (context, snapshot) {
-          if (!snapshot.hasData) {
-            return const Center(child: CircularProgressIndicator());
-          }
-
-          final todos = snapshot.data!.docs.map((doc) {
-            final data = doc.data() as Map<String, dynamic>;
-            return {
-              'id': doc.id,
-              'title': data['title'],
-              'description': data['description'],
-              'dueDate': data['dueDate'],
-              'isDone': data['isDone'],
-            };
-          }).toList();
-
-          final pendingCount = todos.where((t) => t['isDone'] == false).length;
-          final completedCount = todos.where((t) => t['isDone'] == true).length;
-
-          return Stack(
-            children: [
-              Column(
-                children: [
-                  Container(
-                    height: screenHeight * 0.2,
-                    color: const Color.fromRGBO(13, 13, 13, 1),
-                  ),
-                  Expanded(
-                    child: Container(
-                      color: const Color.fromRGBO(26, 26, 26, 1),
-                    ),
-                  ),
-                ],
-              ),
-              Positioned(
-                top: screenHeight * 0.2 - 20,
-                left: 16,
-                right: 16,
-                bottom: 0,
-                child: Column(
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 12),
-                            decoration: BoxDecoration(
-                              color: const Color.fromRGBO(38, 38, 38, 1),
-                              borderRadius: BorderRadius.circular(6),
-                            ),
-                            child: const TextField(
-                              decoration: InputDecoration(
-                                hintText: '🚀 Search...',
-                                hintStyle: TextStyle(color: Colors.white54),
-                                border: InputBorder.none,
-                              ),
-                              style: TextStyle(color: Colors.white),
-                            ),
+      body: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          children: [
+            _buildTopBar(),
+            const SizedBox(height: 16),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                _statusCounter('Pending', pendingCount),
+                _statusCounter('Completed', completedCount),
+              ],
+            ),
+            Expanded(
+              child: filteredTodos.isEmpty
+                  ? Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Image.asset(
+                            'assets/icons/list_custom.png',
+                            width: 100,
+                            height: 100,
+                            color: const Color.fromARGB(255, 83, 82, 82),
                           ),
-                        ),
-                        const SizedBox(width: 8),
-                        ElevatedButton(
-                          onPressed: _navigateToAddTask,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor:
-                                const Color.fromRGBO(30, 111, 159, 1),
-                            foregroundColor: Colors.white,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(6),
-                            ),
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 16, vertical: 12),
-                          ),
-                          child: const Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text('Add',
-                                  style: TextStyle(
-                                      fontWeight: FontWeight.w600,
-                                      color: Colors.white)),
-                              SizedBox(width: 6),
-                              Icon(Icons.add_circle_outline,
-                                  size: 22, color: Colors.white),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        _statusCounter('Pending', pendingCount),
-                        _statusCounter('Completed', completedCount),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    Expanded(
-                      child: ListView.builder(
-                        itemCount: todos.length,
-                        itemBuilder: (context, index) {
-                          final todo = todos[index];
-                          return Card(
-                            color: const Color.fromRGBO(48, 48, 48, 1),
-                            margin: const EdgeInsets.symmetric(vertical: 8),
-                            child: ListTile(
-                              leading: Checkbox(
-                                value: todo['isDone'],
-                                onChanged: (value) {
-                                  FirebaseFirestore.instance
-                                      .collection('users')
-                                      .doc(user!.uid)
-                                      .collection('todos')
-                                      .doc(todo['id'])
-                                      .update({'isDone': value});
-                                },
-                                activeColor:
-                                    const Color.fromRGBO(30, 111, 159, 1),
-                                checkColor: Colors.white,
-                                shape: const CircleBorder(),
-                              ),
-                              title: Text(todo['title'],
-                                  style:
-                                      const TextStyle(color: Colors.white)),
-                              subtitle: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
+                          Center(
+                            child: RichText(
+                              textAlign: TextAlign.center,
+                              text: const TextSpan(
                                 children: [
-                                  Text(todo['description'],
-                                      style: const TextStyle(
-                                          color: Colors.white60)),
-                                  Text('Due: ${todo['dueDate']}',
-                                      style: const TextStyle(
-                                          color: Colors.white38)),
-                                ],
-                              ),
-                              trailing: Wrap(
-                                spacing: -20,
-                                children: [
-                                  IconButton(
-                                    icon: const Icon(Icons.edit,
-                                        color: Colors.grey),
-                                    onPressed: () async {
-                                      final updatedTask = await Navigator.push(
-                                        context,
-                                        MaterialPageRoute(
-                                          builder: (context) => EditTaskPage(
-                                            taskId: todo['id'],
-                                            title: todo['title'],
-                                            description: todo['description'],
-                                            dueDate: todo['dueDate'], initialTitle: 'no', initialDescription: '', initialDueDate: '',
-                                          ),
-                                        ),
-                                      );
-
-                                      if (updatedTask != null &&
-                                          updatedTask
-                                              is Map<String, dynamic>) {
-                                        await FirebaseFirestore.instance
-                                            .collection('users')
-                                            .doc(user!.uid)
-                                            .collection('todos')
-                                            .doc(todo['id'])
-                                            .update(updatedTask);
-                                      }
-                                    },
+                                  TextSpan(
+                                    text: 'You don’t have any tasks yet.\n',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      color: Color.fromARGB(255, 130, 129, 129),
+                                      fontSize: 18,
+                                    ),
                                   ),
-                                  IconButton(
-                                    icon: const Icon(Icons.delete,
-                                        color: Colors.grey),
-                                    onPressed: () {
-                                      FirebaseFirestore.instance
-                                          .collection('users')
-                                          .doc(user!.uid)
-                                          .collection('todos')
-                                          .doc(todo['id'])
-                                          .delete();
-                                    },
+                                  TextSpan(
+                                    text:
+                                        'Start adding tasks and manage your time effectively.',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.normal,
+                                      color: Color.fromARGB(255, 111, 110, 110),
+                                      fontSize: 18,
+                                    ),
                                   ),
                                 ],
                               ),
                             ),
-                          );
-                        },
+                          ),
+                        ],
                       ),
+                    )
+                  : ListView.builder(
+                      itemCount: filteredTodos.length,
+                      itemBuilder: (_, index) {
+                        final todo = filteredTodos[index];
+                        return Card(
+                          color: const Color(0xFF303030),
+                          margin: const EdgeInsets.symmetric(vertical: 6),
+                          child: ListTile(
+                            leading: Checkbox(
+                              value: todo.isDone,
+                              onChanged: (value) {
+                                Provider.of<TodoProvider>(context,
+                                        listen: false)
+                                    .toggleDone(todo.id, value!);
+                              },
+                              activeColor: const Color(0xFF1E6F9F),
+                              checkColor: Colors.white,
+                              shape: const CircleBorder(),
+                            ),
+                            title: Text(
+                              todo.title,
+                              style: TextStyle(
+                                color: Colors.white,
+                                decoration: todo.isDone
+                                    ? TextDecoration.lineThrough
+                                    : TextDecoration.none,
+                                decorationColor: Colors.white,
+                              ),
+                            ),
+                            subtitle: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  todo.description,
+                                  style: TextStyle(
+                                    color: Colors.white60,
+                                    decoration: todo.isDone
+                                        ? TextDecoration.lineThrough
+                                        : TextDecoration.none,
+                                    decorationColor: Colors.white,
+                                  ),
+                                ),
+                                Text(
+                                  'Due: ${todo.dueDate}',
+                                  style: const TextStyle(
+                                    color: Color.fromRGBO(255, 255, 255, 0.384),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            trailing: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                IconButton(
+                                  visualDensity: VisualDensity.compact,
+                                  icon: Image.asset(
+                                    'assets/icons/edit.png',
+                                    width: 25,
+                                    height: 25,
+                                    color: const Color.fromARGB(
+                                        255, 204, 200, 200),
+                                  ),
+                                  onPressed: () async {
+                                    final updated = await Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (_) => EditTaskPage(
+                                          taskId: todo.id,
+                                          initialTitle: todo.title,
+                                          initialDescription: todo.description,
+                                          initialDueDate: todo.dueDate,
+                                        ),
+                                      ),
+                                    );
+                                    if (updated != null &&
+                                        updated is Map<String, dynamic>) {
+                                      Provider.of<TodoProvider>(context,
+                                              listen: false)
+                                          .updateTodo(todo.id, updated);
+                                    }
+                                  },
+                                ),
+                                IconButton(
+                                  visualDensity: VisualDensity.compact,
+                                  icon: Image.asset(
+                                    'assets/icons/delete.png',
+                                    width: 21,
+                                    height: 21,
+                                    color: const Color.fromARGB(
+                                        255, 204, 200, 200),
+                                  ),
+                                  onPressed: () {
+                                    Provider.of<TodoProvider>(context,
+                                            listen: false)
+                                        .deleteTodo(todo.id);
+                                  },
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
                     ),
-                  ],
-                ),
-              ),
-            ],
-          );
-        },
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -266,11 +246,59 @@ class _HomePageState extends State<HomePage> {
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
           decoration: BoxDecoration(
-            color: const Color.fromRGBO(38, 38, 38, 1),
+            color: const Color(0xFF262626),
             borderRadius: BorderRadius.circular(12),
           ),
-          child: Text('$count',
-              style: const TextStyle(color: Colors.white)),
+          child: Text('$count', style: const TextStyle(color: Colors.white)),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTopBar() {
+    return Row(
+      children: [
+        Expanded(
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            decoration: BoxDecoration(
+              color: const Color(0xFF262626),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: TextField(
+              controller: _searchController,
+              onChanged: (value) {
+                setState(() {
+                  _searchQuery = value.toLowerCase(); // to make it case-insensitive
+                });
+              },
+              decoration: const InputDecoration(
+                hintText: '🚀 Search...',
+                hintStyle: TextStyle(color: Colors.white54),
+                border: InputBorder.none,
+              ),
+              style: const TextStyle(color: Colors.white),
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        ElevatedButton(
+          onPressed: _navigateToAddTask,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: const Color(0xFF1E6F9F),
+            foregroundColor: Colors.white,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(6),
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          ),
+          child: const Row(
+            children: [
+              Text('Add', style: TextStyle(color: Colors.white)),
+              SizedBox(width: 6),
+              Icon(Icons.add_circle_outline, color: Colors.white),
+            ],
+          ),
         ),
       ],
     );
